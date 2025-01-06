@@ -65,11 +65,11 @@ mod test_tcp_stream {
         const TESTER_ADDR: &str = "127.0.0.1:0";
 
         let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await;
+        let listener = listener.unwrap();
 
-        let stream = TcpStream::connect(TESTER_ADDR).await;
+        let stream = TcpStream::connect(listener.local_addr().unwrap()).await;
 
         let mut stream = stream.unwrap();
-        let listener = listener.unwrap();
 
         let (mut socket, _) = listener.accept().await.unwrap();
 
