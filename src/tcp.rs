@@ -9,7 +9,10 @@ use doip_definitions::{
         RoutingActivationResponse,
     },
 };
-use futures::{SinkExt, StreamExt};
+use futures::{
+    stream::{SplitSink, SplitStream},
+    SinkExt, StreamExt,
+};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
 use tokio_util::codec::Framed;
 
@@ -197,20 +200,3 @@ mod test_tcp_stream {
         assert_eq!(echo.to_bytes()[8..], bytes)
     }
 }
-
-// use std::io;
-
-// use doip_codec::DoipCodec;
-// use tokio::net::ToSocketAddrs;
-// use tokio_util::codec::Framed;
-
-// struct TCPTEST {}
-
-// impl TCPTEST {
-//     pub async fn connect<A: ToSocketAddrs>(
-//         addr: A,
-//     ) -> io::Result<Framed<TokioTcpStream, DoipCodec>> {
-//         let stream = TokioTcpStream::connect(addr).await?;
-//         Ok(Framed::new(stream, DoipCodec))
-//     }
-// }
