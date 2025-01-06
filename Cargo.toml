@@ -14,3 +14,15 @@ categories = ["development-tools", "network-programming"]
 strip = true      # Automatically strip symbols from the binary.
 lto = true
 codegen-units = 1
+
+[dependencies]
+doip-codec = "2.0.2"
+doip-definitions = "1.0.3"
+futures = "0.3.31"
+tokio = { version = "1.42.0", features = [
+  "rt-multi-thread",
+  "macros",
+  "net",
+  "io-util",
+] }
+tokio-util = { version = "0.7.13", features = ["codec"] }
