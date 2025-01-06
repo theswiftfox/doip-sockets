@@ -10,7 +10,6 @@ use doip_definitions::{
     },
 };
 use futures::{
-    stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
