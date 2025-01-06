@@ -10,19 +10,19 @@ use doip_definitions::{
     },
 };
 use futures::{SinkExt, StreamExt};
-use tokio::net::ToSocketAddrs;
+use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
 use tokio_util::codec::Framed;
 
 use crate::error::SocketSendError;
 
 #[derive(Debug)]
 pub struct TcpStream {
-    io: Framed<tokio::net::TcpStream, DoipCodec>,
+    io: Framed<TokioTcpStream, DoipCodec>,
     protocol_version: DoipVersion,
 }
 
 impl TcpStream {
-    pub fn new(io: Framed<tokio::net::TcpStream, DoipCodec>) -> Self {
+    pub fn new(io: Framed<TokioTcpStream, DoipCodec>) -> Self {
         TcpStream {
             io,
             protocol_version: DoipVersion::Iso13400_2012,
@@ -30,13 +30,13 @@ impl TcpStream {
     }
 
     pub async fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<TcpStream> {
-        match tokio::net::TcpStream::connect(addr).await {
+        match TokioTcpStream::connect(addr).await {
             Ok(stream) => Ok(Self::apply_codec(stream)),
             Err(err) => Err(err),
         }
     }
 
-    fn apply_codec(stream: tokio::net::TcpStream) -> TcpStream {
+    fn apply_codec(stream: TokioTcpStream) -> TcpStream {
         TcpStream {
             io: Framed::new(stream, DoipCodec),
             protocol_version: DoipVersion::Iso13400_2012,
@@ -58,6 +58,37 @@ impl TcpStream {
     pub async fn read(&mut self) -> Option<Result<DoipMessage, DecodeError>> {
         self.io.next().await
     }
+
+    pub fn from_std(stream: std::net::TcpStream) -> io::Result<TcpStream> {
+        let stream = TokioTcpStream::from_std(stream)?;
+        Ok(Self::apply_codec(stream))
+    }
+
+    // fn into_split()
+    // fn into_std()
+    // fn linger()
+    // fn local_addr()
+    // fn nodelay()
+    // fn peek()
+    // fn peer_addr()
+    // fn poll_peek()
+    // fn poll_read_ready()
+    // fn poll_write_ready()
+    // fn readable()
+    // fn ready()
+    // fn set_linger()
+    // fn set_nodelay()
+    // fn set_ttl()
+    // fn split()
+    // fn take_error()
+    // fn try_io()
+    // fn try_read()
+    // fn try_read_buf()
+    // fn try_read_vectored()
+    // fn try_write()
+    // fn try_write_vectored()
+    // fn ttl()
+    // fn writeable()
 }
 
 pub trait DoipTcpPayload {}
@@ -178,8 +209,8 @@ mod test_tcp_stream {
 // impl TCPTEST {
 //     pub async fn connect<A: ToSocketAddrs>(
 //         addr: A,
-//     ) -> io::Result<Framed<tokio::net::TcpStream, DoipCodec>> {
-//         let stream = tokio::net::TcpStream::connect(addr).await?;
+//     ) -> io::Result<Framed<TokioTcpStream, DoipCodec>> {
+//         let stream = TokioTcpStream::connect(addr).await?;
 //         Ok(Framed::new(stream, DoipCodec))
 //     }
 // }
