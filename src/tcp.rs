@@ -62,7 +62,7 @@ mod test_tcp_stream {
 
     #[tokio::test]
     async fn test_send() {
-        const TESTER_ADDR: &str = "127.0.0.1:8080";
+        const TESTER_ADDR: &str = "127.0.0.1:0";
 
         let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await;
 
