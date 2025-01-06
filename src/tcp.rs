@@ -3,7 +3,11 @@ use std::io;
 use doip_codec::{DecodeError, DoipCodec};
 use doip_definitions::{
     header::{DoipPayload, DoipVersion},
-    message::{DoipMessage, RoutingActivationRequest, RoutingActivationResponse},
+    message::{
+        AliveCheckRequest, AliveCheckResponse, DiagnosticMessage, DiagnosticMessageAck,
+        DiagnosticMessageNack, DoipMessage, GenericNack, RoutingActivationRequest,
+        RoutingActivationResponse,
+    },
 };
 use futures::{SinkExt, StreamExt};
 use tokio::net::ToSocketAddrs;
@@ -58,8 +62,14 @@ impl TcpStream {
 
 pub trait DoipTcpPayload {}
 
+impl DoipTcpPayload for GenericNack {}
 impl DoipTcpPayload for RoutingActivationRequest {}
 impl DoipTcpPayload for RoutingActivationResponse {}
+impl DoipTcpPayload for AliveCheckRequest {}
+impl DoipTcpPayload for AliveCheckResponse {}
+impl DoipTcpPayload for DiagnosticMessage {}
+impl DoipTcpPayload for DiagnosticMessageAck {}
+impl DoipTcpPayload for DiagnosticMessageNack {}
 
 #[cfg(test)]
 mod test_tcp_stream {
