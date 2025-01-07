@@ -9,17 +9,32 @@ use doip_definitions::{
         RoutingActivationResponse,
     },
 };
-use futures::{
-    SinkExt, StreamExt,
+use futures::{SinkExt, StreamExt};
+use tokio::{
+    io::{ReadHalf, WriteHalf},
+    net::{TcpStream as TokioTcpStream, ToSocketAddrs},
 };
-use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
-use tokio_util::codec::Framed;
+use tokio_util::codec::{Framed, FramedRead, FramedWrite};
 
 use crate::error::SocketSendError;
+
+pub struct TcpStreamReadHalf {
+    _io: FramedRead<ReadHalf<TokioTcpStream>, DoipCodec>,
+    pub config: SocketConfig,
+}
+pub struct TcpStreamWriteHalf {
+    _io: FramedWrite<WriteHalf<TokioTcpStream>, DoipCodec>,
+    pub config: SocketConfig,
+}
 
 #[derive(Debug)]
 pub struct TcpStream {
     io: Framed<TokioTcpStream, DoipCodec>,
+    config: SocketConfig,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SocketConfig {
     protocol_version: DoipVersion,
 }
 
@@ -27,7 +42,9 @@ impl TcpStream {
     pub fn new(io: Framed<TokioTcpStream, DoipCodec>) -> Self {
         TcpStream {
             io,
-            protocol_version: DoipVersion::Iso13400_2012,
+            config: SocketConfig {
+                protocol_version: DoipVersion::Iso13400_2012,
+            },
         }
     }
 
@@ -41,7 +58,9 @@ impl TcpStream {
     fn apply_codec(stream: TokioTcpStream) -> TcpStream {
         TcpStream {
             io: Framed::new(stream, DoipCodec),
-            protocol_version: DoipVersion::Iso13400_2012,
+            config: SocketConfig {
+                protocol_version: DoipVersion::Iso13400_2012,
+            },
         }
     }
 
@@ -49,7 +68,7 @@ impl TcpStream {
         &mut self,
         payload: A,
     ) -> Result<(), SocketSendError> {
-        let msg = DoipMessage::new(self.protocol_version, Box::new(payload));
+        let msg = DoipMessage::new(self.config.protocol_version, Box::new(payload));
 
         match self.io.send(msg).await {
             Ok(_) => Ok(()),
@@ -66,7 +85,26 @@ impl TcpStream {
         Ok(Self::apply_codec(stream))
     }
 
-    // fn into_split()
+    pub fn into_split(self) -> (TcpStreamReadHalf, TcpStreamWriteHalf) {
+        let stream: TokioTcpStream = self.io.into_inner();
+
+        let (r_half, w_half) = tokio::io::split(stream);
+
+        let read = FramedRead::new(r_half, DoipCodec);
+        let write = FramedWrite::new(w_half, DoipCodec);
+
+        (
+            TcpStreamReadHalf {
+                _io: read,
+                config: self.config,
+            },
+            TcpStreamWriteHalf {
+                _io: write,
+                config: self.config,
+            },
+        )
+    }
+
     // fn into_std()
     // fn linger()
     // fn local_addr()
