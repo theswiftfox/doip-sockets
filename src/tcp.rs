@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self};
 
 use doip_codec::{DecodeError, DoipCodec};
 use doip_definitions::{
@@ -9,7 +9,7 @@ use doip_definitions::{
         RoutingActivationResponse,
     },
 };
-use futures::{SinkExt, StreamExt};
+use futures::{Sink, SinkExt, StreamExt};
 use tokio::{
     io::{ReadHalf, WriteHalf},
     net::{TcpStream as TokioTcpStream, ToSocketAddrs},
@@ -19,12 +19,33 @@ use tokio_util::codec::{Framed, FramedRead, FramedWrite};
 use crate::error::SocketSendError;
 
 pub struct TcpStreamReadHalf {
-    _io: FramedRead<ReadHalf<TokioTcpStream>, DoipCodec>,
+    io: FramedRead<ReadHalf<TokioTcpStream>, DoipCodec>,
     pub config: SocketConfig,
 }
+
+impl TcpStreamReadHalf {
+    pub async fn read(&mut self) -> Option<Result<DoipMessage, DecodeError>> {
+        self.io.next().await
+    }
+}
+
 pub struct TcpStreamWriteHalf {
-    _io: FramedWrite<WriteHalf<TokioTcpStream>, DoipCodec>,
+    io: FramedWrite<WriteHalf<TokioTcpStream>, DoipCodec>,
     pub config: SocketConfig,
+}
+
+impl TcpStreamWriteHalf {
+    pub async fn send<A: DoipTcpPayload + DoipPayload + 'static>(
+        &mut self,
+        payload: A,
+    ) -> Result<(), SocketSendError> {
+        let msg = DoipMessage::new(self.config.protocol_version, Box::new(payload));
+
+        match self.io.send(msg).await {
+            Ok(_) => Ok(()),
+            Err(err) => Err(SocketSendError::EncodeError(err)),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -95,11 +116,11 @@ impl TcpStream {
 
         (
             TcpStreamReadHalf {
-                _io: read,
+                io: read,
                 config: self.config,
             },
             TcpStreamWriteHalf {
-                _io: write,
+                io: write,
                 config: self.config,
             },
         )
@@ -158,7 +179,7 @@ mod test_tcp_stream {
 
     #[tokio::test]
     async fn test_connect() {
-        const TESTER_ADDR: &str = "127.0.0.1:8080";
+        const TESTER_ADDR: &str = "127.0.0.1:0";
 
         let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await;
 
@@ -233,6 +254,42 @@ mod test_tcp_stream {
 
         let _ = server.send(routing_activation_res).await;
         let echo = client.read().await.unwrap().unwrap();
+
+        assert_eq!(echo.to_bytes()[8..], bytes)
+    }
+
+    #[tokio::test]
+    async fn test_into_split() {
+        const TESTER_ADDR: &str = "127.0.0.1:0";
+        let routing_activation = RoutingActivationRequest {
+            source_address: [0x0e, 0x80],
+            activation_type: ActivationType::Default,
+            buffer: [0, 0, 0, 0],
+        };
+
+        let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await;
+        let listener = listener.unwrap();
+
+        let client = TcpStream::connect(listener.local_addr().unwrap()).await;
+        let client = client.unwrap();
+        let (mut read, mut write) = client.into_split();
+
+        let (socket, _) = listener.accept().await.unwrap();
+        let mut server = TcpStream::new(Framed::new(socket, DoipCodec));
+
+        let _ = write.send(routing_activation).await;
+        let _ = server.read().await.unwrap().unwrap();
+
+        let routing_activation_res = RoutingActivationResponse {
+            logical_address: [0x0e, 0x80],
+            source_address: [0x14, 0x11],
+            activation_code: ActivationCode::SuccessfullyActivated,
+            buffer: [0, 0, 0, 0],
+        };
+        let bytes = routing_activation_res.to_bytes();
+
+        let _ = server.send(routing_activation_res).await;
+        let echo = read.read().await.unwrap().unwrap();
 
         assert_eq!(echo.to_bytes()[8..], bytes)
     }
