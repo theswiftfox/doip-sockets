@@ -20,6 +20,18 @@ impl TcpStreamReadHalf {
     pub async fn read(&mut self) -> Option<Result<DoipMessage, DecodeError>> {
         self.io.next().await
     }
+
+    pub fn new(
+        io: FramedRead<ReadHalf<TokioTcpStream>, DoipCodec>,
+        config: Option<SocketConfig>,
+    ) -> Self {
+        let config = match config {
+            Some(cfg) => cfg,
+            None => SocketConfig::default(),
+        };
+
+        TcpStreamReadHalf { io, config }
+    }
 }
 
 pub struct TcpStreamWriteHalf {
@@ -38,5 +50,17 @@ impl TcpStreamWriteHalf {
             Ok(_) => Ok(()),
             Err(err) => Err(SocketSendError::EncodeError(err)),
         }
+    }
+
+    pub fn new(
+        io: FramedWrite<WriteHalf<TokioTcpStream>, DoipCodec>,
+        config: Option<SocketConfig>,
+    ) -> Self {
+        let config = match config {
+            Some(cfg) => cfg,
+            None => SocketConfig::default(),
+        };
+
+        TcpStreamWriteHalf { io, config }
     }
 }

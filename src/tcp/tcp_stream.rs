@@ -1,17 +1,27 @@
-use std::io;
+use std::{
+    io::{self, Error},
+    net::SocketAddr,
+    time::Duration,
+};
 
 use doip_codec::{DecodeError, DoipCodec};
 use doip_definitions::{
     header::{DoipPayload, DoipVersion},
-    message::{DoipMessage, RoutingActivationRequest, RoutingActivationResponse},
+    message::DoipMessage,
 };
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
-use tokio_util::codec::{Framed, FramedRead, FramedWrite};
+use tokio_util::{
+    bytes::BytesMut,
+    codec::{Decoder, Framed, FramedRead, FramedWrite},
+};
 
 use crate::error::SocketSendError;
 
-use super::{tcp_split::{TcpStreamReadHalf, TcpStreamWriteHalf}, DoipTcpPayload, SocketConfig};
+use super::{
+    tcp_split::{TcpStreamReadHalf, TcpStreamWriteHalf},
+    DoipTcpPayload, SocketConfig,
+};
 
 #[derive(Debug)]
 pub struct TcpStream {
@@ -75,42 +85,20 @@ impl TcpStream {
         let write = FramedWrite::new(w_half, DoipCodec);
 
         (
-            TcpStreamReadHalf {
-                io: read,
-                config: self.config,
-            },
-            TcpStreamWriteHalf {
-                io: write,
-                config: self.config,
-            },
+            TcpStreamReadHalf::new(read, Some(self.config)),
+            TcpStreamWriteHalf::new(write, Some(self.config)),
         )
     }
 
-    // fn into_std()
-    // fn linger()
-    // fn local_addr()
-    // fn nodelay()
-    // fn peek()
-    // fn peer_addr()
-    // fn poll_peek()
-    // fn poll_read_ready()
-    // fn poll_write_ready()
-    // fn readable()
-    // fn ready()
-    // fn set_linger()
-    // fn set_nodelay()
-    // fn set_ttl()
-    // fn split()
-    // fn take_error()
-    // fn try_io()
-    // fn try_read()
-    // fn try_read_buf()
-    // fn try_read_vectored()
-    // fn try_write()
-    // fn try_write_vectored()
-    // fn ttl()
-    // fn writeable()
+    pub fn get_socket_ref(&self) -> &TokioTcpStream {
+        self.io.get_ref()
+    }
+
+    pub fn into_socket(self) -> TokioTcpStream {
+        self.io.into_inner()
+    }
 }
+
 #[cfg(test)]
 mod test_tcp_stream {
     use doip_codec::DoipCodec;

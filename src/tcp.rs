@@ -1,7 +1,10 @@
-use doip_definitions::{header::DoipVersion, message::{
-    AliveCheckRequest, AliveCheckResponse, DiagnosticMessage, DiagnosticMessageAck,
-    DiagnosticMessageNack, GenericNack, RoutingActivationRequest, RoutingActivationResponse,
-}};
+use doip_definitions::{
+    header::DoipVersion,
+    message::{
+        AliveCheckRequest, AliveCheckResponse, DiagnosticMessage, DiagnosticMessageAck,
+        DiagnosticMessageNack, GenericNack, RoutingActivationRequest, RoutingActivationResponse,
+    },
+};
 
 pub mod tcp_split;
 pub mod tcp_stream;
@@ -20,4 +23,12 @@ impl DoipTcpPayload for DiagnosticMessageNack {}
 #[derive(Debug, Copy, Clone)]
 pub struct SocketConfig {
     protocol_version: DoipVersion,
+}
+
+impl Default for SocketConfig {
+    fn default() -> Self {
+        Self {
+            protocol_version: DoipVersion::DefaultValue,
+        }
+    }
 }
