@@ -25,12 +25,10 @@ impl TcpStreamReadHalf {
         io: FramedRead<ReadHalf<TokioTcpStream>, DoipCodec>,
         config: Option<SocketConfig>,
     ) -> Self {
-        let config = match config {
-            Some(cfg) => cfg,
-            None => SocketConfig::default(),
-        };
-
-        TcpStreamReadHalf { io, config }
+        TcpStreamReadHalf {
+            io,
+            config: config.unwrap_or_default(),
+        }
     }
 }
 
@@ -56,11 +54,9 @@ impl TcpStreamWriteHalf {
         io: FramedWrite<WriteHalf<TokioTcpStream>, DoipCodec>,
         config: Option<SocketConfig>,
     ) -> Self {
-        let config = match config {
-            Some(cfg) => cfg,
-            None => SocketConfig::default(),
-        };
-
-        TcpStreamWriteHalf { io, config }
+        TcpStreamWriteHalf {
+            io,
+            config: config.unwrap_or_default(),
+        }
     }
 }

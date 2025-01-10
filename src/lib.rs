@@ -1,6 +1,12 @@
+mod error;
 mod tcp;
 mod udp;
-mod error;
 
+use doip_definitions::header::DoipVersion;
 pub use tcp::*;
 pub use udp::*;
+
+#[derive(Debug, Copy, Clone)]
+pub struct SocketConfig {
+    protocol_version: DoipVersion,
+}

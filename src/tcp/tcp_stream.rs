@@ -1,8 +1,6 @@
-use std::{
-    io::{self, Error},
-    net::SocketAddr,
-    time::Duration,
-};
+use std::
+    io::{self}
+;
 
 use doip_codec::{DecodeError, DoipCodec};
 use doip_definitions::{
@@ -11,10 +9,7 @@ use doip_definitions::{
 };
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
-use tokio_util::{
-    bytes::BytesMut,
-    codec::{Decoder, Framed, FramedRead, FramedWrite},
-};
+use tokio_util::codec::{Framed, FramedRead, FramedWrite};
 
 use crate::error::SocketSendError;
 

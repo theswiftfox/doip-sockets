@@ -6,6 +6,8 @@ use doip_definitions::{
     },
 };
 
+use crate::SocketConfig;
+
 pub mod tcp_split;
 pub mod tcp_stream;
 
@@ -19,11 +21,6 @@ impl DoipTcpPayload for AliveCheckResponse {}
 impl DoipTcpPayload for DiagnosticMessage {}
 impl DoipTcpPayload for DiagnosticMessageAck {}
 impl DoipTcpPayload for DiagnosticMessageNack {}
-
-#[derive(Debug, Copy, Clone)]
-pub struct SocketConfig {
-    protocol_version: DoipVersion,
-}
 
 impl Default for SocketConfig {
     fn default() -> Self {
