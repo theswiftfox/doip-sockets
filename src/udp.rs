@@ -4,7 +4,9 @@ use doip_definitions::message::{
     VehicleIdentificationRequestEid, VehicleIdentificationRequestVin,
 };
 
-pub mod udp_socket;
+mod udp_socket;
+
+pub use crate::udp::udp_socket::*;
 
 pub trait DoipUdpPayload {}
 

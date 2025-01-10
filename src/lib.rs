@@ -1,10 +1,10 @@
+#![warn(missing_docs)]
+
 mod error;
-mod tcp;
-mod udp;
+pub mod tcp;
+pub mod udp;
 
 use doip_definitions::header::DoipVersion;
-pub use tcp::*;
-pub use udp::*;
 
 #[derive(Debug, Copy, Clone)]
 pub struct SocketConfig {

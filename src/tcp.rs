@@ -8,8 +8,10 @@ use doip_definitions::{
 
 use crate::SocketConfig;
 
-pub mod tcp_split;
-pub mod tcp_stream;
+mod tcp_split;
+mod tcp_stream;
+pub use crate::tcp::tcp_split::*;
+pub use crate::tcp::tcp_stream::*;
 
 pub trait DoipTcpPayload {}
 

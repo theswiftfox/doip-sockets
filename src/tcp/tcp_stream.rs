@@ -1,6 +1,4 @@
-use std::
-    io::{self}
-;
+use std::io::{self};
 
 use doip_codec::{DecodeError, DoipCodec};
 use doip_definitions::{
@@ -106,7 +104,7 @@ mod test_tcp_stream {
     use tokio::io::AsyncReadExt;
     use tokio_util::codec::Framed;
 
-    use crate::tcp_stream::TcpStream;
+    use crate::tcp::tcp_stream::TcpStream;
 
     #[tokio::test]
     async fn test_connect() {
