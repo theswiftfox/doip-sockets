@@ -67,8 +67,8 @@ mod test_udp_socket {
 
         let (res, addr) = sock2.recv().await.unwrap().unwrap();
 
-        assert!(res.header.payload_type == PayloadType::RoutingActivationRequest);
-        assert!(res.header.payload_length == 7);
+        assert!(res.header.payload_type == PayloadType::VehicleIdentificationRequest);
+        assert!(res.header.payload_length == 0);
         assert!(addr == TESTER_ADDR1.to_socket_addrs().unwrap().next().unwrap());
     }
 }

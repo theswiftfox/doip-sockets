@@ -110,9 +110,11 @@ mod test_tcp_stream {
     async fn test_connect() {
         const TESTER_ADDR: &str = "127.0.0.1:0";
 
-        let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await;
+        let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await.unwrap();
+        let addr = listener.local_addr().unwrap();
 
-        let stream = TcpStream::connect(TESTER_ADDR).await;
+        let stream = TcpStream::connect(addr).await;
+        dbg!(&stream);
 
         assert!(stream.is_ok());
 
