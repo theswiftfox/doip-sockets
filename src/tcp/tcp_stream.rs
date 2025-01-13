@@ -15,7 +15,11 @@ use super::{
     tcp_split::{TcpStreamReadHalf, TcpStreamWriteHalf},
     DoipTcpPayload, SocketConfig,
 };
-
+/// Simple implementation of a TCP Stream
+///
+/// Applying only the most simple methods on this struct it is able to act as
+/// a simple TCP stream. If extended functionality is required you can access the
+/// inner Tokio TCP Stream, or raise a Issue on GitHub.
 #[derive(Debug)]
 pub struct TcpStream {
     io: Framed<TokioTcpStream, DoipCodec>,
@@ -23,15 +27,17 @@ pub struct TcpStream {
 }
 
 impl TcpStream {
-    pub fn new(io: Framed<TokioTcpStream, DoipCodec>) -> Self {
+    /// Creates a new TCP Stream from a Tokio TCP Stream
+    pub fn new(io: TokioTcpStream) -> Self {
         TcpStream {
-            io,
+            io: Framed::new(io, DoipCodec),
             config: SocketConfig {
                 protocol_version: DoipVersion::Iso13400_2012,
             },
         }
     }
 
+    /// Creates a new TCP Stream given a remote address
     pub async fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<TcpStream> {
         match TokioTcpStream::connect(addr).await {
             Ok(stream) => Ok(Self::apply_codec(stream)),
@@ -48,6 +54,7 @@ impl TcpStream {
         }
     }
 
+    /// Send a DoIP frame to the sink
     pub async fn send<A: DoipTcpPayload + DoipPayload + 'static>(
         &mut self,
         payload: A,
@@ -60,15 +67,18 @@ impl TcpStream {
         }
     }
 
+    /// Read a DoIP frame off the stream
     pub async fn read(&mut self) -> Option<Result<DoipMessage, DecodeError>> {
         self.io.next().await
     }
 
+    /// Converts a standard library TCP Stream to a DoIP Framed TCP Stream
     pub fn from_std(stream: std::net::TcpStream) -> io::Result<TcpStream> {
         let stream = TokioTcpStream::from_std(stream)?;
         Ok(Self::apply_codec(stream))
     }
 
+    /// Splits the TCP Stream into a Read Half and Write Half
     pub fn into_split(self) -> (TcpStreamReadHalf, TcpStreamWriteHalf) {
         let stream: TokioTcpStream = self.io.into_inner();
 
@@ -83,10 +93,12 @@ impl TcpStream {
         )
     }
 
-    pub fn get_socket_ref(&self) -> &TokioTcpStream {
+    /// Get a reference to the inner Tokio TCP Stream
+    pub fn get_stream_ref(&self) -> &TokioTcpStream {
         self.io.get_ref()
     }
 
+    /// Access the inner Tokio TCP Stream, consumes the DoIP TCP Stream
     pub fn into_socket(self) -> TokioTcpStream {
         self.io.into_inner()
     }
@@ -94,7 +106,6 @@ impl TcpStream {
 
 #[cfg(test)]
 mod test_tcp_stream {
-    use doip_codec::DoipCodec;
     use doip_definitions::{
         header::DoipPayload,
         message::{
@@ -102,7 +113,6 @@ mod test_tcp_stream {
         },
     };
     use tokio::io::AsyncReadExt;
-    use tokio_util::codec::Framed;
 
     use crate::tcp::tcp_stream::TcpStream;
 
@@ -170,7 +180,7 @@ mod test_tcp_stream {
         let mut client = client.unwrap();
 
         let (socket, _) = listener.accept().await.unwrap();
-        let mut server = TcpStream::new(Framed::new(socket, DoipCodec));
+        let mut server = TcpStream::new(socket);
 
         let _ = &client.send(routing_activation).await;
         let _ = server.read().await.unwrap().unwrap();
@@ -206,7 +216,7 @@ mod test_tcp_stream {
         let (mut read, mut write) = client.into_split();
 
         let (socket, _) = listener.accept().await.unwrap();
-        let mut server = TcpStream::new(Framed::new(socket, DoipCodec));
+        let mut server = TcpStream::new(socket);
 
         let _ = write.send(routing_activation).await;
         let _ = server.read().await.unwrap().unwrap();

@@ -1,21 +1,24 @@
-use std::{io, net::SocketAddr};
-
+use super::DoipUdpPayload;
+use crate::SocketConfig;
 use doip_codec::{DecodeError, DoipCodec, EncodeError};
 use doip_definitions::{header::DoipPayload, message::DoipMessage};
 use futures::{SinkExt, StreamExt};
+use std::{io, net::SocketAddr};
 use tokio::net::{ToSocketAddrs, UdpSocket as TokioUdpSocket};
 use tokio_util::udp::UdpFramed;
 
-use crate::SocketConfig;
-
-use super::DoipUdpPayload;
-
+/// Simple implementation of a UDP Socket with DoIP Frames
+///
+/// Applying only the most simple methods on this struct it is able to act as
+/// a simple UDP socket. If extended functionality is required you can access the
+/// inner Tokio UDP Socket, or raise a Issue on GitHub.
 pub struct UdpSocket {
     io: UdpFramed<DoipCodec, TokioUdpSocket>,
     config: SocketConfig,
 }
 
 impl UdpSocket {
+    /// Bind the socket to a local address
     pub async fn bind<A: ToSocketAddrs>(addr: A) -> io::Result<UdpSocket> {
         let sock = TokioUdpSocket::bind(addr).await?;
 
@@ -25,14 +28,17 @@ impl UdpSocket {
         })
     }
 
+    /// Connect to a remote address
     pub async fn connect<A: ToSocketAddrs>(&self, addr: A) -> io::Result<()> {
         self.io.get_ref().connect(addr).await
     }
 
+    /// Receive a DoIP Frame from the socket queue
     pub async fn recv(&mut self) -> Option<Result<(DoipMessage, SocketAddr), DecodeError>> {
         self.io.next().await
     }
 
+    /// Send a DoIP Frame
     pub async fn send<A: DoipUdpPayload + DoipPayload + 'static>(
         &mut self,
         payload: A,
@@ -40,6 +46,16 @@ impl UdpSocket {
     ) -> Result<(), EncodeError> {
         let msg = DoipMessage::new(self.config.protocol_version, Box::new(payload));
         self.io.send((msg, addr)).await
+    }
+
+    /// Get a reference to the inner Tokio UDP Socket
+    pub fn get_socket_ref(&self) -> &TokioUdpSocket {
+        self.io.get_ref()
+    }
+
+    /// Access the inner Tokio UDP Socket, consumes the DoIP UDP Socket
+    pub fn into_socket(self) -> TokioUdpSocket {
+        self.io.into_inner()
     }
 }
 

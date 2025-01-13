@@ -8,6 +8,8 @@ mod udp_socket;
 
 pub use crate::udp::udp_socket::*;
 
+/// Helper Trait which assists in applying LSP hints to the send and receive of
+/// sockets.
 pub trait DoipUdpPayload {}
 
 impl DoipUdpPayload for GenericNack {}

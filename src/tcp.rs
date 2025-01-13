@@ -13,6 +13,8 @@ mod tcp_stream;
 pub use crate::tcp::tcp_split::*;
 pub use crate::tcp::tcp_stream::*;
 
+/// Helper Trait which assists in applying LSP hints to the send and receive of
+/// sockets.
 pub trait DoipTcpPayload {}
 
 impl DoipTcpPayload for GenericNack {}
