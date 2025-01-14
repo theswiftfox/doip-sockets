@@ -1,7 +1,10 @@
 use super::DoipUdpPayload;
 use crate::SocketConfig;
 use doip_codec::{DecodeError, DoipCodec, EncodeError};
-use doip_definitions::{header::DoipPayload, message::DoipMessage};
+use doip_definitions::{
+    header::{DoipPayload, DoipVersion},
+    message::DoipMessage,
+};
 use futures::{SinkExt, StreamExt};
 use std::{io, net::SocketAddr};
 use tokio::net::{ToSocketAddrs, UdpSocket as TokioUdpSocket};
@@ -56,6 +59,11 @@ impl UdpSocket {
     /// Access the inner Tokio UDP Socket, consumes the DoIP UDP Socket
     pub fn into_socket(self) -> TokioUdpSocket {
         self.io.into_inner()
+    }
+
+    /// Change the protocol version on the socket
+    pub fn set_protocol_version(&mut self, version: DoipVersion) {
+        self.config.protocol_version = version
     }
 }
 
