@@ -20,4 +20,9 @@ impl TcpListener {
 
         Ok((TcpStream::new(stream), addr))
     }
+
+    /// Retruns the reference for the internal listener
+    pub fn get_ref(&self) -> &TokioTcpListener {
+        &self.io
+    }
 }

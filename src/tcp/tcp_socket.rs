@@ -6,7 +6,7 @@ use super::{TcpListener, TcpStream};
 
 /// A TCP socket that has not yet been converted to a TcpStream or TcpListener
 pub struct TcpSocket {
-    io: tokio::net::TcpSocket,
+    io: TokioTcpSocket,
 }
 
 impl TcpSocket {
@@ -31,5 +31,10 @@ impl TcpSocket {
     /// Converts the socket into a TcpListener
     pub fn listen(self, backlog: u32) -> io::Result<TcpListener> {
         Ok(TcpListener::new(self.io.listen(backlog)?))
+    }
+
+    /// Retruns the reference for the internal socket
+    pub fn get_ref(&self) -> &TokioTcpSocket {
+        &self.io
     }
 }
