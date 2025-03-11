@@ -10,10 +10,7 @@ use doip_definitions::{
 };
 use futures::{SinkExt, StreamExt};
 use openssl::ssl::{SslConnector, SslMethod, SslOptions, SslVerifyMode, SslVersion};
-use tokio::{
-    io::AsyncWriteExt,
-    net::{TcpStream as TokioTcpStream, ToSocketAddrs},
-};
+use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
 
 use tokio_openssl::SslStream;
 use tokio_util::codec::{Framed, FramedRead, FramedWrite};
@@ -69,9 +66,11 @@ impl DoIpSslStream {
                 let ssl = connect_configuration.into_ssl("domain")?;
                 let mut stream = SslStream::new(ssl, stream)?;
 
-                // wait for the actual connection ...
-                // TODO: proper error handling
-                Pin::new(&mut stream).connect().await.unwrap();
+                // wait for the actual connection .
+                Pin::new(&mut stream)
+                    .connect()
+                    .await
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
                 Ok(Self::apply_codec(stream))
             }
