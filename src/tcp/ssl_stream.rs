@@ -49,7 +49,14 @@ impl DoIpSslStream {
             Ok(stream) => {
                 // allow unsafe ciphers in order to get better debugging
                 let mut builder = SslConnector::builder(SslMethod::tls())?;
-                builder.set_cipher_list("ECDHE-ECDSA-NULL-SHA")?;
+                let tls_ciphers = vec![
+                    "AES-256-GCM-SHA384",
+                    "CHACHA20-POLY1305-SHA256",
+                    "ECDHE-RSA-AES256-GCM-SHA384",
+                    "ECDHE-ECDSA-AES256-GCM-SHA384",
+                    "ECDHE-ECDSA-NULL-SHA",
+                ];
+                builder.set_cipher_list(&tls_ciphers.join(":"))?;
                 builder.set_verify(SslVerifyMode::NONE);
                 // necessary for NULL encryption
                 builder.set_security_level(0);
@@ -144,7 +151,6 @@ mod test_tcp_stream {
             ActivationCode, ActivationType, RoutingActivationRequest, RoutingActivationResponse,
         },
     };
-    use tokio::io::AsyncReadExt;
 
     use crate::tcp::{ssl_stream::DoIpSslStream, tcp_stream::TcpStream};
 
