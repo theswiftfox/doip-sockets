@@ -43,19 +43,29 @@ impl DoIpSslStream {
         }
     }
 
-    /// Creates a new TCP Stream given a remote address
+    /// Creates a new TCP Stream given a remote address with the default ciphers
     pub async fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<DoIpSslStream> {
+        let default_ciphers = vec![
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+        ];
+
+        Self::connect_with_ciphers(addr, &default_ciphers).await
+    }
+
+    /// Creates a new TCP Stream given a remote address and a list of ciphers
+    /// tls_ciphers is a list of ciphers in openssl format
+    pub async fn connect_with_ciphers<A: ToSocketAddrs>(
+        addr: A,
+        tls_ciphers: &[&str],
+    ) -> io::Result<DoIpSslStream> {
         match TokioTcpStream::connect(addr).await {
             Ok(stream) => {
                 // allow unsafe ciphers in order to get better debugging
                 let mut builder = SslConnector::builder(SslMethod::tls())?;
-                let tls_ciphers = vec![
-                    "AES-256-GCM-SHA384",
-                    "CHACHA20-POLY1305-SHA256",
-                    "ECDHE-RSA-AES256-GCM-SHA384",
-                    "ECDHE-ECDSA-AES256-GCM-SHA384",
-                    "ECDHE-ECDSA-NULL-SHA",
-                ];
+
                 builder.set_cipher_list(&tls_ciphers.join(":"))?;
                 builder.set_verify(SslVerifyMode::NONE);
                 // necessary for NULL encryption
