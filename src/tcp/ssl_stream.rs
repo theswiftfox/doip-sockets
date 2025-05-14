@@ -79,8 +79,9 @@ impl DoIpSslStream {
                     preset_options.union(SslOptions::ALLOW_UNSAFE_LEGACY_RENEGOTIATION),
                 );
 
-                let connect_configuration = builder.build().configure()?;
-                let ssl = connect_configuration.into_ssl("domain")?;
+                let mut connect_configuration = builder.build().configure()?;
+                connect_configuration.set_use_server_name_indication(false);
+                let ssl = connect_configuration.into_ssl("")?;
                 let mut stream = SslStream::new(ssl, stream)?;
 
                 // wait for the actual connection .
