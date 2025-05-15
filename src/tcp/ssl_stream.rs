@@ -9,7 +9,7 @@ use doip_definitions::{
     message::DoipMessage,
 };
 use futures::{SinkExt, StreamExt};
-use openssl::ssl::{SslConnector, SslMethod, SslOptions, SslVerifyMode, SslVersion};
+use openssl::ssl::{Ssl, SslContextBuilder, SslMethod, SslOptions, SslVerifyMode, SslVersion};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
 
 use tokio_openssl::SslStream;
@@ -52,7 +52,7 @@ impl DoIpSslStream {
             "ECDHE-ECDSA-AES256-GCM-SHA384",
         ];
 
-        Self::connect_with_ciphers(addr, &default_ciphers).await
+        Self::connect_with_ciphers(addr, &default_ciphers, None).await
     }
 
     /// Creates a new TCP Stream given a remote address and a list of ciphers
@@ -60,11 +60,12 @@ impl DoIpSslStream {
     pub async fn connect_with_ciphers<A: ToSocketAddrs>(
         addr: A,
         tls_ciphers: &[&str],
+        eliptic_curve_groups: Option<&[&str]>,
     ) -> io::Result<DoIpSslStream> {
         match TokioTcpStream::connect(addr).await {
             Ok(stream) => {
                 // allow unsafe ciphers in order to get better debugging
-                let mut builder = SslConnector::builder(SslMethod::tls())?;
+                let mut builder = SslContextBuilder::new(SslMethod::tls_client())?;
 
                 builder.set_cipher_list(&tls_ciphers.join(":"))?;
                 builder.set_verify(SslVerifyMode::NONE);
@@ -73,15 +74,19 @@ impl DoIpSslStream {
                 builder.set_min_proto_version(Some(SslVersion::TLS1_2))?;
                 builder.set_max_proto_version(Some(SslVersion::TLS1_3))?;
 
+                if let Some(groups) = eliptic_curve_groups {
+                    builder.set_groups_list(&groups.join(":"))?;
+                }
+
                 let preset_options = builder.options();
                 // this is the flag legacy_renegotiation in openssl client
                 builder.set_options(
                     preset_options.union(SslOptions::ALLOW_UNSAFE_LEGACY_RENEGOTIATION),
                 );
 
-                let mut connect_configuration = builder.build().configure()?;
-                connect_configuration.set_use_server_name_indication(false);
-                let ssl = connect_configuration.into_ssl("")?;
+                let ctx = builder.build();
+                let ssl = Ssl::new(&ctx)?;
+
                 let mut stream = SslStream::new(ssl, stream)?;
 
                 // wait for the actual connection .
