@@ -21,6 +21,17 @@ pub struct UdpSocket {
 }
 
 impl UdpSocket {
+    /// Creates a new UDP Socket from an `std::net::UdpSocket`
+    /// This can be used in conjunction with `socket2`’s `Socket`` interface to configure a socket before it’s handed off, such as setting options like `reuse_address`
+    pub fn from_std(sock: std::net::UdpSocket) -> io::Result<UdpSocket> {
+        let sock = TokioUdpSocket::from_std(sock)?;
+
+        Ok(UdpSocket {
+            io: UdpFramed::new(sock, DoipCodec),
+            config: SocketConfig::default(),
+        })
+    }
+
     /// Bind the socket to a local address
     pub async fn bind<A: ToSocketAddrs>(addr: A) -> io::Result<UdpSocket> {
         let sock = TokioUdpSocket::bind(addr).await?;
