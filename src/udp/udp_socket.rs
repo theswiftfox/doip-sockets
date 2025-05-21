@@ -1,10 +1,6 @@
-use super::DoipUdpPayload;
-use crate::SocketConfig;
+use crate::{new_header, SocketConfig};
 use doip_codec::{DecodeError, DoipCodec, EncodeError};
-use doip_definitions::{
-    header::{DoipPayload, DoipVersion},
-    message::DoipMessage,
-};
+use doip_definitions::{header::ProtocolVersion, message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
 use std::{io, net::SocketAddr};
 use tokio::net::{ToSocketAddrs, UdpSocket as TokioUdpSocket};
@@ -27,7 +23,7 @@ impl UdpSocket {
         let sock = TokioUdpSocket::from_std(sock)?;
 
         Ok(UdpSocket {
-            io: UdpFramed::new(sock, DoipCodec),
+            io: UdpFramed::new(sock, DoipCodec {}),
             config: SocketConfig::default(),
         })
     }
@@ -37,7 +33,7 @@ impl UdpSocket {
         let sock = TokioUdpSocket::bind(addr).await?;
 
         Ok(UdpSocket {
-            io: UdpFramed::new(sock, DoipCodec),
+            io: UdpFramed::new(sock, DoipCodec {}),
             config: SocketConfig::default(),
         })
     }
@@ -53,12 +49,15 @@ impl UdpSocket {
     }
 
     /// Send a DoIP Frame
-    pub async fn send<A: DoipUdpPayload + DoipPayload + 'static>(
+    pub async fn send(
         &mut self,
-        payload: A,
+        payload: DoipPayload,
         addr: SocketAddr,
     ) -> Result<(), EncodeError> {
-        let msg = DoipMessage::new(self.config.protocol_version, Box::new(payload));
+        let msg = DoipMessage {
+            header: new_header(self.config.protocol_version, &payload),
+            payload,
+        };
         self.io.send((msg, addr)).await
     }
 
@@ -73,7 +72,7 @@ impl UdpSocket {
     }
 
     /// Change the protocol version on the socket
-    pub fn set_protocol_version(&mut self, version: DoipVersion) {
+    pub fn set_protocol_version(&mut self, version: ProtocolVersion) {
         self.config.protocol_version = version
     }
 }
@@ -82,7 +81,10 @@ impl UdpSocket {
 mod test_udp_socket {
     use std::net::ToSocketAddrs;
 
-    use doip_definitions::{header::PayloadType, message::VehicleIdentificationRequest};
+    use doip_definitions::{
+        header::PayloadType,
+        payload::{DoipPayload, VehicleIdentificationRequest},
+    };
 
     use super::UdpSocket;
 
@@ -91,7 +93,8 @@ mod test_udp_socket {
         const TESTER_ADDR1: &str = "127.0.0.1:8080";
         const TESTER_ADDR2: &str = "127.0.0.1:8081";
         let socket_addr = TESTER_ADDR2.to_socket_addrs().unwrap().next().unwrap();
-        let routing_activation = VehicleIdentificationRequest {};
+        let routing_activation =
+            DoipPayload::VehicleIdentificationRequest(VehicleIdentificationRequest {});
 
         let mut sock1 = UdpSocket::bind(TESTER_ADDR1).await.unwrap();
 

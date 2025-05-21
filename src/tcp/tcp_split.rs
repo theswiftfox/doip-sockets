@@ -1,12 +1,12 @@
 use doip_codec::{DecodeError, DoipCodec};
-use doip_definitions::{header::DoipPayload, message::DoipMessage};
+use doip_definitions::{message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
-use crate::error::SocketSendError;
+use crate::{error::SocketSendError, new_header};
 
-use super::{DoipTcpPayload, SocketConfig};
+use super::SocketConfig;
 
 /// Simple implementation of a TCP Stream Read Half
 ///
@@ -66,11 +66,11 @@ where
     }
 
     /// Send a message to the sink
-    pub async fn send<A: DoipTcpPayload + DoipPayload + 'static>(
-        &mut self,
-        payload: A,
-    ) -> Result<(), SocketSendError> {
-        let msg = DoipMessage::new(self.config.protocol_version, Box::new(payload));
+    pub async fn send(&mut self, payload: DoipPayload) -> Result<(), SocketSendError> {
+        let msg = DoipMessage {
+            header: new_header(self.config.protocol_version, &payload),
+            payload,
+        };
 
         match self.io.send(msg).await {
             Ok(_) => Ok(()),

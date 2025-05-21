@@ -1,6 +1,6 @@
 use doip_definitions::{
-    header::DoipVersion,
-    message::{
+    header::ProtocolVersion,
+    payload::{
         AliveCheckRequest, AliveCheckResponse, DiagnosticMessage, DiagnosticMessageAck,
         DiagnosticMessageNack, GenericNack, RoutingActivationRequest, RoutingActivationResponse,
     },
@@ -35,7 +35,7 @@ impl DoipTcpPayload for DiagnosticMessageNack {}
 impl Default for SocketConfig {
     fn default() -> Self {
         Self {
-            protocol_version: DoipVersion::DefaultValue,
+            protocol_version: ProtocolVersion::DefaultValue,
         }
     }
 }

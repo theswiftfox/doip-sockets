@@ -4,10 +4,7 @@ use std::{
 };
 
 use doip_codec::{DecodeError, DoipCodec};
-use doip_definitions::{
-    header::{DoipPayload, DoipVersion},
-    message::DoipMessage,
-};
+use doip_definitions::{header::ProtocolVersion, message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
 use openssl::ssl::{Ssl, SslContextBuilder, SslMethod, SslOptions, SslVerifyMode, SslVersion};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
@@ -15,11 +12,11 @@ use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
 use tokio_openssl::SslStream;
 use tokio_util::codec::{Framed, FramedRead, FramedWrite};
 
-use crate::error::SocketSendError;
+use crate::{error::SocketSendError, new_header};
 
 use super::{
     tcp_split::{TcpStreamReadHalf, TcpStreamWriteHalf},
-    DoipTcpPayload, SocketConfig,
+    SocketConfig,
 };
 /// Simple implementation of a TCP Stream
 ///
@@ -36,9 +33,9 @@ impl DoIpSslStream {
     /// Creates a new TCP Stream from a Tokio TCP Stream
     pub fn new(io: SslStream<TokioTcpStream>) -> Self {
         DoIpSslStream {
-            io: Framed::new(io, DoipCodec),
+            io: Framed::new(io, DoipCodec {}),
             config: SocketConfig {
-                protocol_version: DoipVersion::Iso13400_2012,
+                protocol_version: ProtocolVersion::Iso13400_2012,
             },
         }
     }
@@ -103,19 +100,19 @@ impl DoIpSslStream {
 
     fn apply_codec(stream: SslStream<TokioTcpStream>) -> DoIpSslStream {
         DoIpSslStream {
-            io: Framed::new(stream, DoipCodec),
+            io: Framed::new(stream, DoipCodec {}),
             config: SocketConfig {
-                protocol_version: DoipVersion::Iso13400_2012,
+                protocol_version: ProtocolVersion::Iso13400_2012,
             },
         }
     }
 
     /// Send a DoIP frame to the sink
-    pub async fn send<A: DoipTcpPayload + DoipPayload + 'static>(
-        &mut self,
-        payload: A,
-    ) -> Result<(), SocketSendError> {
-        let msg = DoipMessage::new(self.config.protocol_version, Box::new(payload));
+    pub async fn send(&mut self, payload: DoipPayload) -> Result<(), SocketSendError> {
+        let msg = DoipMessage {
+            header: new_header(self.config.protocol_version, &payload),
+            payload,
+        };
 
         match self.io.send(msg).await {
             Ok(_) => Ok(()),
@@ -139,8 +136,8 @@ impl DoIpSslStream {
 
         let (r_half, w_half) = tokio::io::split(stream);
 
-        let read = FramedRead::new(r_half, DoipCodec);
-        let write = FramedWrite::new(w_half, DoipCodec);
+        let read = FramedRead::new(r_half, DoipCodec {});
+        let write = FramedWrite::new(w_half, DoipCodec {});
 
         (
             TcpStreamReadHalf::new(read, Some(self.config)),
@@ -161,15 +158,14 @@ impl DoIpSslStream {
 
 #[cfg(test)]
 mod test_tcp_stream {
-    use doip_definitions::{
-        header::DoipPayload,
-        message::{
-            ActivationCode, ActivationType, RoutingActivationRequest, RoutingActivationResponse,
-        },
+    use doip_definitions::payload::{
+        ActivationCode, ActivationType, DoipPayload, RoutingActivationRequest,
+        RoutingActivationResponse,
     };
 
     use crate::tcp::{ssl_stream::DoIpSslStream, tcp_stream::TcpStream};
 
+    #[ignore]
     #[tokio::test]
     async fn test_connect() {
         const TESTER_ADDR: &str = "10.2.1.101:3496";
@@ -186,17 +182,18 @@ mod test_tcp_stream {
         drop(listener);
     }
 
-    #[tokio::test]
+    #[ignore]
+    #[tokio::test()]
     async fn test_send() {
         // try to connect to an actual ECU... actual ip address redacted
         let stream = DoIpSslStream::connect("127.0.0.1:3496").await;
 
         let mut stream = stream.unwrap();
-        let routing_activation = RoutingActivationRequest {
+        let routing_activation = DoipPayload::RoutingActivationRequest(RoutingActivationRequest {
             source_address: [15, 13],
             activation_type: ActivationType::Default,
             buffer: [0, 0, 0, 0],
-        };
+        });
 
         let send_result = stream.send(routing_activation).await;
         println!("send_result: {:?}", send_result);
@@ -208,11 +205,11 @@ mod test_tcp_stream {
     #[tokio::test]
     async fn test_read() {
         const TESTER_ADDR: &str = "127.0.0.1:0";
-        let routing_activation = RoutingActivationRequest {
+        let routing_activation = DoipPayload::RoutingActivationRequest(RoutingActivationRequest {
             source_address: [0x0e, 0x80],
             activation_type: ActivationType::Default,
             buffer: [0, 0, 0, 0],
-        };
+        });
 
         let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await;
         let listener = listener.unwrap();
@@ -226,28 +223,27 @@ mod test_tcp_stream {
         let _ = &client.send(routing_activation).await;
         let _ = server.read().await.unwrap().unwrap();
 
-        let routing_activation_res = RoutingActivationResponse {
-            logical_address: [0x0e, 0x80],
-            source_address: [0x14, 0x11],
-            activation_code: ActivationCode::SuccessfullyActivated,
-            buffer: [0, 0, 0, 0],
-        };
-        let bytes = routing_activation_res.to_bytes();
-
-        let _ = server.send(routing_activation_res).await;
+        let routing_activation_res =
+            DoipPayload::RoutingActivationResponse(RoutingActivationResponse {
+                logical_address: [0x0e, 0x80],
+                source_address: [0x14, 0x11],
+                activation_code: ActivationCode::SuccessfullyActivated,
+                buffer: [0, 0, 0, 0],
+            });
+        let _ = server.send(routing_activation_res.clone()).await;
         let echo = client.read().await.unwrap().unwrap();
 
-        assert_eq!(echo.to_bytes()[8..], bytes)
+        assert_eq!(echo.payload, routing_activation_res);
     }
 
     #[tokio::test]
     async fn test_into_split() {
         const TESTER_ADDR: &str = "127.0.0.1:0";
-        let routing_activation = RoutingActivationRequest {
+        let routing_activation = DoipPayload::RoutingActivationRequest(RoutingActivationRequest {
             source_address: [0x0e, 0x80],
             activation_type: ActivationType::Default,
             buffer: [0, 0, 0, 0],
-        };
+        });
 
         let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await;
         let listener = listener.unwrap();
@@ -262,17 +258,17 @@ mod test_tcp_stream {
         let _ = write.send(routing_activation).await;
         let _ = server.read().await.unwrap().unwrap();
 
-        let routing_activation_res = RoutingActivationResponse {
-            logical_address: [0x0e, 0x80],
-            source_address: [0x14, 0x11],
-            activation_code: ActivationCode::SuccessfullyActivated,
-            buffer: [0, 0, 0, 0],
-        };
-        let bytes = routing_activation_res.to_bytes();
+        let routing_activation_res =
+            DoipPayload::RoutingActivationResponse(RoutingActivationResponse {
+                logical_address: [0x0e, 0x80],
+                source_address: [0x14, 0x11],
+                activation_code: ActivationCode::SuccessfullyActivated,
+                buffer: [0, 0, 0, 0],
+            });
 
-        let _ = server.send(routing_activation_res).await;
+        let _ = server.send(routing_activation_res.clone()).await;
         let echo = read.read().await.unwrap().unwrap();
 
-        assert_eq!(echo.to_bytes()[8..], bytes)
+        assert_eq!(echo.payload, routing_activation_res)
     }
 }
