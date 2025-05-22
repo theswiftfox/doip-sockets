@@ -33,6 +33,9 @@ pub mod tcp;
 /// Simple UDP Socket implementation for UDP communication.
 pub mod udp;
 
+pub use doip_codec::DecodeError;
+pub use doip_codec::EncodeError;
+
 /// Configuration for UDP and TCP Sockets
 ///
 /// This provides the methods within each struct with constants which can be set

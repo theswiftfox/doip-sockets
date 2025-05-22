@@ -16,7 +16,7 @@ lto = true
 codegen-units = 1
 
 [dependencies]
-doip-codec = { git = "https://github.com/theswiftfox/doip-codec.git", rev = "fd972ae" }
+doip-codec = { git = "https://github.com/theswiftfox/doip-codec.git", rev = "f6bbc3b" }
 doip-definitions = { git = "https://github.com/theswiftfox/doip-definitions.git", rev = "6cd6d45" }
 futures = "0.3"
 tokio = { version = "1.43.0", features = [
