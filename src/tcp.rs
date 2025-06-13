@@ -8,11 +8,13 @@ use doip_definitions::{
 
 use crate::SocketConfig;
 
+#[cfg(feature = "ssl")]
 mod ssl_stream;
 mod tcp_listener;
 mod tcp_socket;
 mod tcp_split;
 mod tcp_stream;
+#[cfg(feature = "ssl")]
 pub use crate::tcp::ssl_stream::*;
 pub use crate::tcp::tcp_listener::*;
 pub use crate::tcp::tcp_socket::*;
