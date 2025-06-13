@@ -1,5 +1,5 @@
 use crate::{new_header, SocketConfig};
-use doip_codec::{DecodeError, DoipCodec, EncodeError};
+use doip_codec::{DoipCodec, Error as CodecError};
 use doip_definitions::{header::ProtocolVersion, message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
 use std::{io, net::SocketAddr};
@@ -44,16 +44,12 @@ impl UdpSocket {
     }
 
     /// Receive a DoIP Frame from the socket queue
-    pub async fn recv(&mut self) -> Option<Result<(DoipMessage, SocketAddr), DecodeError>> {
+    pub async fn recv(&mut self) -> Option<Result<(DoipMessage, SocketAddr), CodecError>> {
         self.io.next().await
     }
 
     /// Send a DoIP Frame
-    pub async fn send(
-        &mut self,
-        payload: DoipPayload,
-        addr: SocketAddr,
-    ) -> Result<(), EncodeError> {
+    pub async fn send(&mut self, payload: DoipPayload, addr: SocketAddr) -> Result<(), CodecError> {
         let msg = DoipMessage {
             header: new_header(self.config.protocol_version, &payload),
             payload,

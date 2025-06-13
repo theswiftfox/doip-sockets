@@ -1,6 +1,6 @@
 use std::io::{self};
 
-use doip_codec::{DecodeError, DoipCodec};
+use doip_codec::{DoipCodec, Error as CodecError};
 use doip_definitions::{header::ProtocolVersion, message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
@@ -65,7 +65,7 @@ impl TcpStream {
     }
 
     /// Read a DoIP frame off the stream
-    pub async fn read(&mut self) -> Option<Result<DoipMessage, DecodeError>> {
+    pub async fn read(&mut self) -> Option<Result<DoipMessage, CodecError>> {
         self.io.next().await
     }
 
@@ -108,7 +108,6 @@ impl TcpStream {
 
 #[cfg(test)]
 mod test_tcp_stream {
-    use doip_codec::Encoder;
     use doip_definitions::{
         message::DoipMessage,
         payload::{
@@ -117,6 +116,7 @@ mod test_tcp_stream {
         },
     };
     use tokio::io::AsyncReadExt;
+    use tokio_util::codec::Encoder;
 
     use crate::{new_header, tcp::tcp_stream::TcpStream};
 
@@ -161,8 +161,8 @@ mod test_tcp_stream {
         };
 
         let mut codec = doip_codec::DoipCodec {};
-        let mut bytes = Vec::<u8>::new();
-        codec.to_bytes(routing_activation, &mut bytes).unwrap();
+        let mut bytes = tokio_util::bytes::BytesMut::new();
+        codec.encode(routing_activation, &mut bytes).unwrap();
 
         let _ = &stream.send(routing_activation_payload).await;
 

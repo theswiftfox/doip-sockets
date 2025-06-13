@@ -33,8 +33,7 @@ pub mod tcp;
 /// Simple UDP Socket implementation for UDP communication.
 pub mod udp;
 
-pub use doip_codec::DecodeError;
-pub use doip_codec::EncodeError;
+pub use doip_codec::Error;
 
 /// Configuration for UDP and TCP Sockets
 ///

@@ -1,4 +1,4 @@
-use doip_codec::{DecodeError, DoipCodec};
+use doip_codec::{DoipCodec, Error as CodecError};
 use doip_definitions::{message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
@@ -35,7 +35,7 @@ where
     }
 
     /// Read from the stream
-    pub async fn read(&mut self) -> Option<Result<DoipMessage, DecodeError>> {
+    pub async fn read(&mut self) -> Option<Result<DoipMessage, CodecError>> {
         self.io.next().await
     }
 }

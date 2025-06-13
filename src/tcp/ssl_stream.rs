@@ -3,7 +3,7 @@ use std::{
     pin::Pin,
 };
 
-use doip_codec::{DecodeError, DoipCodec};
+use doip_codec::{DoipCodec, Error as CodecError};
 use doip_definitions::{header::ProtocolVersion, message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
 use openssl::ssl::{Ssl, SslContextBuilder, SslMethod, SslOptions, SslVerifyMode, SslVersion};
@@ -121,7 +121,7 @@ impl DoIpSslStream {
     }
 
     /// Read a DoIP frame off the stream
-    pub async fn read(&mut self) -> Option<Result<DoipMessage, DecodeError>> {
+    pub async fn read(&mut self) -> Option<Result<DoipMessage, CodecError>> {
         self.io.next().await
     }
 
