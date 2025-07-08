@@ -1,10 +1,10 @@
 use doip_codec::{DoipCodec, Error as CodecError};
-use doip_definitions::{message::DoipMessage, payload::DoipPayload};
+use doip_definitions::{builder::DoipMessageBuilder, message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
-use crate::{error::SocketSendError, new_header};
+use crate::error::SocketSendError;
 
 use super::SocketConfig;
 
@@ -67,10 +67,10 @@ where
 
     /// Send a message to the sink
     pub async fn send(&mut self, payload: DoipPayload) -> Result<(), SocketSendError> {
-        let msg = DoipMessage {
-            header: new_header(self.config.protocol_version, &payload),
-            payload,
-        };
+        let msg = DoipMessageBuilder::new()
+            .protocol_version(self.config.protocol_version)
+            .payload(payload)
+            .build();
 
         match self.io.send(msg).await {
             Ok(_) => Ok(()),

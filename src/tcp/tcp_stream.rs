@@ -1,12 +1,15 @@
 use std::io::{self};
 
 use doip_codec::{DoipCodec, Error as CodecError};
-use doip_definitions::{header::ProtocolVersion, message::DoipMessage, payload::DoipPayload};
+use doip_definitions::{
+    builder::DoipMessageBuilder, header::ProtocolVersion, message::DoipMessage,
+    payload::DoipPayload,
+};
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
 use tokio_util::codec::{Framed, FramedRead, FramedWrite};
 
-use crate::{error::SocketSendError, new_header};
+use crate::error::SocketSendError;
 
 use super::{
     tcp_split::{TcpStreamReadHalf, TcpStreamWriteHalf},
@@ -53,10 +56,10 @@ impl TcpStream {
 
     /// Send a DoIP frame to the sink
     pub async fn send(&mut self, payload: DoipPayload) -> Result<(), SocketSendError> {
-        let msg = DoipMessage {
-            header: new_header(self.config.protocol_version, &payload),
-            payload,
-        };
+        let msg = DoipMessageBuilder::new()
+            .protocol_version(self.config.protocol_version)
+            .payload(payload)
+            .build();
 
         match self.io.send(msg).await {
             Ok(_) => Ok(()),
@@ -109,7 +112,7 @@ impl TcpStream {
 #[cfg(test)]
 mod test_tcp_stream {
     use doip_definitions::{
-        message::DoipMessage,
+        builder::DoipMessageBuilder,
         payload::{
             ActivationCode, ActivationType, DoipPayload, RoutingActivationRequest,
             RoutingActivationResponse,
@@ -118,7 +121,7 @@ mod test_tcp_stream {
     use tokio::io::AsyncReadExt;
     use tokio_util::codec::Encoder;
 
-    use crate::{new_header, tcp::tcp_stream::TcpStream};
+    use crate::tcp::tcp_stream::TcpStream;
 
     #[tokio::test]
     async fn test_connect() {
@@ -155,10 +158,10 @@ mod test_tcp_stream {
                 activation_type: ActivationType::Default,
                 buffer: [0, 0, 0, 0],
             });
-        let routing_activation = DoipMessage {
-            header: new_header(stream.config.protocol_version, &routing_activation_payload),
-            payload: routing_activation_payload.clone(),
-        };
+        let routing_activation = DoipMessageBuilder::new()
+            .protocol_version(stream.config.protocol_version)
+            .payload(routing_activation_payload.clone())
+            .build();
 
         let mut codec = doip_codec::DoipCodec {};
         let mut bytes = tokio_util::bytes::BytesMut::new();

@@ -1,6 +1,9 @@
-use crate::{new_header, SocketConfig};
+use crate::SocketConfig;
 use doip_codec::{DoipCodec, Error as CodecError};
-use doip_definitions::{header::ProtocolVersion, message::DoipMessage, payload::DoipPayload};
+use doip_definitions::{
+    builder::DoipMessageBuilder, header::ProtocolVersion, message::DoipMessage,
+    payload::DoipPayload,
+};
 use futures::{SinkExt, StreamExt};
 use std::{io, net::SocketAddr};
 use tokio::net::{ToSocketAddrs, UdpSocket as TokioUdpSocket};
@@ -50,10 +53,10 @@ impl UdpSocket {
 
     /// Send a DoIP Frame
     pub async fn send(&mut self, payload: DoipPayload, addr: SocketAddr) -> Result<(), CodecError> {
-        let msg = DoipMessage {
-            header: new_header(self.config.protocol_version, &payload),
-            payload,
-        };
+        let msg = DoipMessageBuilder::new()
+            .protocol_version(self.config.protocol_version)
+            .payload(payload)
+            .build();
         self.io.send((msg, addr)).await
     }
 
