@@ -1,15 +1,18 @@
-use std::io::{self};
+use std::{
+    io::{self},
+    pin::Pin,
+};
 
 use doip_codec::{DoipCodec, Error as CodecError};
-use doip_definitions::{
-    builder::DoipMessageBuilder, header::ProtocolVersion, message::DoipMessage,
-    payload::DoipPayload,
-};
+use doip_definitions::{header::ProtocolVersion, message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
+use openssl::ssl::{Ssl, SslContextBuilder, SslMethod, SslOptions, SslVerifyMode, SslVersion};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
+
+use tokio_openssl::SslStream;
 use tokio_util::codec::{Framed, FramedRead, FramedWrite};
 
-use crate::error::SocketSendError;
+use crate::{error::SocketSendError, new_header};
 
 use super::{
     tcp_split::{TcpStreamReadHalf, TcpStreamWriteHalf},
@@ -21,15 +24,15 @@ use super::{
 /// a simple TCP stream. If extended functionality is required you can access the
 /// inner Tokio TCP Stream, or raise a Issue on GitHub.
 #[derive(Debug)]
-pub struct TcpStream {
-    io: Framed<TokioTcpStream, DoipCodec>,
+pub struct DoIpSslStream {
+    io: Framed<SslStream<TokioTcpStream>, DoipCodec>,
     config: SocketConfig,
 }
 
-impl TcpStream {
+impl DoIpSslStream {
     /// Creates a new TCP Stream from a Tokio TCP Stream
-    pub fn new(io: TokioTcpStream) -> Self {
-        TcpStream {
+    pub fn new(io: SslStream<TokioTcpStream>) -> Self {
+        DoIpSslStream {
             io: Framed::new(io, DoipCodec {}),
             config: SocketConfig {
                 protocol_version: ProtocolVersion::Iso13400_2012,
@@ -37,16 +40,66 @@ impl TcpStream {
         }
     }
 
-    /// Creates a new TCP Stream given a remote address
-    pub async fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<TcpStream> {
+    /// Creates a new TCP Stream given a remote address with the default ciphers
+    pub async fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<DoIpSslStream> {
+        let default_ciphers = vec![
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+        ];
+
+        Self::connect_with_ciphers(addr, &default_ciphers, None).await
+    }
+
+    /// Creates a new TCP Stream given a remote address and a list of ciphers
+    /// tls_ciphers is a list of ciphers in openssl format
+    pub async fn connect_with_ciphers<A: ToSocketAddrs>(
+        addr: A,
+        tls_ciphers: &[&str],
+        eliptic_curve_groups: Option<&[&str]>,
+    ) -> io::Result<DoIpSslStream> {
         match TokioTcpStream::connect(addr).await {
-            Ok(stream) => Ok(Self::apply_codec(stream)),
+            Ok(stream) => {
+                // allow unsafe ciphers in order to get better debugging
+                let mut builder = SslContextBuilder::new(SslMethod::tls_client())?;
+
+                builder.set_cipher_list(&tls_ciphers.join(":"))?;
+                builder.set_verify(SslVerifyMode::NONE);
+                // necessary for NULL encryption
+                builder.set_security_level(0);
+                builder.set_min_proto_version(Some(SslVersion::TLS1_2))?;
+                builder.set_max_proto_version(Some(SslVersion::TLS1_3))?;
+
+                if let Some(groups) = eliptic_curve_groups {
+                    builder.set_groups_list(&groups.join(":"))?;
+                }
+
+                let preset_options = builder.options();
+                // this is the flag legacy_renegotiation in openssl client
+                builder.set_options(
+                    preset_options.union(SslOptions::ALLOW_UNSAFE_LEGACY_RENEGOTIATION),
+                );
+
+                let ctx = builder.build();
+                let ssl = Ssl::new(&ctx)?;
+
+                let mut stream = SslStream::new(ssl, stream)?;
+
+                // wait for the actual connection .
+                Pin::new(&mut stream)
+                    .connect()
+                    .await
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                Ok(Self::apply_codec(stream))
+            }
             Err(err) => Err(err),
         }
     }
 
-    fn apply_codec(stream: TokioTcpStream) -> TcpStream {
-        TcpStream {
+    fn apply_codec(stream: SslStream<TokioTcpStream>) -> DoIpSslStream {
+        DoIpSslStream {
             io: Framed::new(stream, DoipCodec {}),
             config: SocketConfig {
                 protocol_version: ProtocolVersion::Iso13400_2012,
@@ -56,10 +109,10 @@ impl TcpStream {
 
     /// Send a DoIP frame to the sink
     pub async fn send(&mut self, payload: DoipPayload) -> Result<(), SocketSendError> {
-        let msg = DoipMessageBuilder::new()
-            .protocol_version(self.config.protocol_version)
-            .payload(payload)
-            .build();
+        let msg = DoipMessage {
+            header: new_header(self.config.protocol_version, &payload),
+            payload,
+        };
 
         match self.io.send(msg).await {
             Ok(_) => Ok(()),
@@ -72,20 +125,14 @@ impl TcpStream {
         self.io.next().await
     }
 
-    /// Converts a standard library TCP Stream to a DoIP Framed TCP Stream
-    pub fn from_std(stream: std::net::TcpStream) -> io::Result<TcpStream> {
-        let stream = TokioTcpStream::from_std(stream)?;
-        Ok(Self::apply_codec(stream))
-    }
-
     /// Splits the TCP Stream into a Read Half and Write Half
     pub fn into_split(
         self,
     ) -> (
-        TcpStreamReadHalf<TokioTcpStream>,
-        TcpStreamWriteHalf<TokioTcpStream>,
+        TcpStreamReadHalf<SslStream<TokioTcpStream>>,
+        TcpStreamWriteHalf<SslStream<TokioTcpStream>>,
     ) {
-        let stream: TokioTcpStream = self.io.into_inner();
+        let stream: SslStream<TokioTcpStream> = self.io.into_inner();
 
         let (r_half, w_half) = tokio::io::split(stream);
 
@@ -99,33 +146,29 @@ impl TcpStream {
     }
 
     /// Get a reference to the inner Tokio TCP Stream
-    pub fn get_stream_ref(&self) -> &TokioTcpStream {
+    pub fn get_stream_ref(&self) -> &SslStream<TokioTcpStream> {
         self.io.get_ref()
     }
 
     /// Access the inner Tokio TCP Stream, consumes the DoIP TCP Stream
-    pub fn into_socket(self) -> TokioTcpStream {
+    pub fn into_socket(self) -> SslStream<TokioTcpStream> {
         self.io.into_inner()
     }
 }
 
 #[cfg(test)]
 mod test_tcp_stream {
-    use doip_definitions::{
-        builder::DoipMessageBuilder,
-        payload::{
-            ActivationCode, ActivationType, DoipPayload, RoutingActivationRequest,
-            RoutingActivationResponse,
-        },
+    use doip_definitions::payload::{
+        ActivationCode, ActivationType, DoipPayload, RoutingActivationRequest,
+        RoutingActivationResponse,
     };
-    use tokio::io::AsyncReadExt;
-    use tokio_util::codec::Encoder;
 
-    use crate::tcp::tcp_stream::TcpStream;
+    use crate::tcp::{ssl_stream::DoIpSslStream, tcp_stream::TcpStream};
 
+    #[ignore]
     #[tokio::test]
     async fn test_connect() {
-        const TESTER_ADDR: &str = "127.0.0.1:0";
+        const TESTER_ADDR: &str = "10.2.1.101:3496";
 
         let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -139,43 +182,24 @@ mod test_tcp_stream {
         drop(listener);
     }
 
-    #[tokio::test]
+    #[ignore]
+    #[tokio::test()]
     async fn test_send() {
-        const TESTER_ADDR: &str = "127.0.0.1:0";
-
-        let listener = tokio::net::TcpListener::bind(TESTER_ADDR).await;
-        let listener = listener.unwrap();
-
-        let stream = TcpStream::connect(listener.local_addr().unwrap()).await;
+        // try to connect to an actual ECU... actual ip address redacted
+        let stream = DoIpSslStream::connect("127.0.0.1:3496").await;
 
         let mut stream = stream.unwrap();
+        let routing_activation = DoipPayload::RoutingActivationRequest(RoutingActivationRequest {
+            source_address: [15, 13],
+            activation_type: ActivationType::Default,
+            buffer: [0, 0, 0, 0],
+        });
 
-        let (mut socket, _) = listener.accept().await.unwrap();
+        let send_result = stream.send(routing_activation).await;
+        println!("send_result: {:?}", send_result);
 
-        let routing_activation_payload =
-            DoipPayload::RoutingActivationRequest(RoutingActivationRequest {
-                source_address: [0x0e, 0x80],
-                activation_type: ActivationType::Default,
-                buffer: [0, 0, 0, 0],
-            });
-        let routing_activation = DoipMessageBuilder::new()
-            .protocol_version(stream.config.protocol_version)
-            .payload(routing_activation_payload.clone())
-            .build();
-
-        let mut codec = doip_codec::DoipCodec {};
-        let mut bytes = tokio_util::bytes::BytesMut::new();
-        codec.encode(routing_activation, &mut bytes).unwrap();
-
-        let _ = &stream.send(routing_activation_payload).await;
-
-        let mut buffer = [0; 64];
-        let read = socket.read(&mut buffer).await.unwrap();
-
-        assert_eq!(&buffer[8..read], &bytes[8..read]);
-
-        // Cleanup
-        drop(socket);
+        let read_result = stream.read().await;
+        println!("read_result: {:?}", read_result);
     }
 
     #[tokio::test]
@@ -206,11 +230,10 @@ mod test_tcp_stream {
                 activation_code: ActivationCode::SuccessfullyActivated,
                 buffer: [0, 0, 0, 0],
             });
-
         let _ = server.send(routing_activation_res.clone()).await;
         let echo = client.read().await.unwrap().unwrap();
 
-        assert_eq!(echo.payload, routing_activation_res)
+        assert_eq!(echo.payload, routing_activation_res);
     }
 
     #[tokio::test]

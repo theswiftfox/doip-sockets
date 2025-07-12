@@ -14,7 +14,7 @@
 //! currently of which is solely limited to the version of the protocol used,
 //! however can be extended in future version.
 
-use doip_definitions::header::DoipVersion;
+use doip_definitions::header::ProtocolVersion;
 mod error;
 
 /// Simple TCP Stream and Split implentation for a TCP Stream allowing the conversion of a
@@ -25,11 +25,13 @@ pub mod tcp;
 /// Simple UDP Socket implementation for UDP communication.
 pub mod udp;
 
+pub use doip_codec::Error;
+
 /// Configuration for UDP and TCP Sockets
 ///
 /// This provides the methods within each struct with constants which can be set
 /// during a typical usage with DoIP such as the protocol_version.
 #[derive(Debug, Copy, Clone)]
 pub struct SocketConfig {
-    protocol_version: DoipVersion,
+    protocol_version: ProtocolVersion,
 }

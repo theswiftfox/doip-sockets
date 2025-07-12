@@ -1,9 +1,8 @@
-use super::DoipUdpPayload;
 use crate::SocketConfig;
-use doip_codec::{DecodeError, DoipCodec, EncodeError};
+use doip_codec::{DoipCodec, Error as CodecError};
 use doip_definitions::{
-    header::{DoipPayload, DoipVersion},
-    message::DoipMessage,
+    builder::DoipMessageBuilder, header::ProtocolVersion, message::DoipMessage,
+    payload::DoipPayload,
 };
 use futures::{SinkExt, StreamExt};
 use std::{io, net::SocketAddr};
@@ -21,12 +20,23 @@ pub struct UdpSocket {
 }
 
 impl UdpSocket {
+    /// Creates a new UDP Socket from an `std::net::UdpSocket`
+    /// This can be used in conjunction with `socket2`’s `Socket`` interface to configure a socket before it’s handed off, such as setting options like `reuse_address`
+    pub fn from_std(sock: std::net::UdpSocket) -> io::Result<UdpSocket> {
+        let sock = TokioUdpSocket::from_std(sock)?;
+
+        Ok(UdpSocket {
+            io: UdpFramed::new(sock, DoipCodec {}),
+            config: SocketConfig::default(),
+        })
+    }
+
     /// Bind the socket to a local address
     pub async fn bind<A: ToSocketAddrs>(addr: A) -> io::Result<UdpSocket> {
         let sock = TokioUdpSocket::bind(addr).await?;
 
         Ok(UdpSocket {
-            io: UdpFramed::new(sock, DoipCodec),
+            io: UdpFramed::new(sock, DoipCodec {}),
             config: SocketConfig::default(),
         })
     }
@@ -37,17 +47,16 @@ impl UdpSocket {
     }
 
     /// Receive a DoIP Frame from the socket queue
-    pub async fn recv(&mut self) -> Option<Result<(DoipMessage, SocketAddr), DecodeError>> {
+    pub async fn recv(&mut self) -> Option<Result<(DoipMessage, SocketAddr), CodecError>> {
         self.io.next().await
     }
 
     /// Send a DoIP Frame
-    pub async fn send<A: DoipUdpPayload + DoipPayload + 'static>(
-        &mut self,
-        payload: A,
-        addr: SocketAddr,
-    ) -> Result<(), EncodeError> {
-        let msg = DoipMessage::new(self.config.protocol_version, Box::new(payload));
+    pub async fn send(&mut self, payload: DoipPayload, addr: SocketAddr) -> Result<(), CodecError> {
+        let msg = DoipMessageBuilder::new()
+            .protocol_version(self.config.protocol_version)
+            .payload(payload)
+            .build();
         self.io.send((msg, addr)).await
     }
 
@@ -62,7 +71,7 @@ impl UdpSocket {
     }
 
     /// Change the protocol version on the socket
-    pub fn set_protocol_version(&mut self, version: DoipVersion) {
+    pub fn set_protocol_version(&mut self, version: ProtocolVersion) {
         self.config.protocol_version = version
     }
 }
@@ -71,7 +80,10 @@ impl UdpSocket {
 mod test_udp_socket {
     use std::net::ToSocketAddrs;
 
-    use doip_definitions::{header::PayloadType, message::VehicleIdentificationRequest};
+    use doip_definitions::{
+        header::PayloadType,
+        payload::{DoipPayload, VehicleIdentificationRequest},
+    };
 
     use super::UdpSocket;
 
@@ -80,7 +92,8 @@ mod test_udp_socket {
         const TESTER_ADDR1: &str = "127.0.0.1:8080";
         const TESTER_ADDR2: &str = "127.0.0.1:8081";
         let socket_addr = TESTER_ADDR2.to_socket_addrs().unwrap().next().unwrap();
-        let routing_activation = VehicleIdentificationRequest {};
+        let routing_activation =
+            DoipPayload::VehicleIdentificationRequest(VehicleIdentificationRequest {});
 
         let mut sock1 = UdpSocket::bind(TESTER_ADDR1).await.unwrap();
 

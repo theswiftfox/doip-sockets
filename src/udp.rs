@@ -1,4 +1,4 @@
-use doip_definitions::message::{
+use doip_definitions::payload::{
     EntityStatusRequest, EntityStatusResponse, GenericNack, PowerInformationRequest,
     PowerInformationResponse, VehicleAnnouncementMessage, VehicleIdentificationRequest,
     VehicleIdentificationRequestEid, VehicleIdentificationRequestVin,

@@ -16,8 +16,8 @@ lto = true
 codegen-units = 1
 
 [dependencies]
-doip-codec = "2.0.2"
-doip-definitions = "1.0.3"
+doip-codec = "2.0.8"
+doip-definitions = "3.0.13"
 futures = "0.3.31"
 tokio = { version = "1.43.0", features = [
   "rt-multi-thread",
@@ -26,6 +26,12 @@ tokio = { version = "1.43.0", features = [
   "io-util",
 ] }
 tokio-util = { version = "0.7.13", features = ["codec", "net"] }
-thiserror = "2.0.11"
+tokio-openssl = { version = "0.6.5", optional = true }
+openssl = { version = "0.10.70", optional = true }
+thiserror = "2.0.12"
 
 [dev-dependencies]
+
+[features]
+default = []
+ssl = ["dep:tokio-openssl", "dep:openssl"]

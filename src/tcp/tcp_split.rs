@@ -1,33 +1,33 @@
-use doip_codec::{DecodeError, DoipCodec};
-use doip_definitions::{header::DoipPayload, message::DoipMessage};
+use doip_codec::{DoipCodec, Error as CodecError};
+use doip_definitions::{builder::DoipMessageBuilder, message::DoipMessage, payload::DoipPayload};
 use futures::{SinkExt, StreamExt};
-use tokio::{
-    io::{ReadHalf, WriteHalf},
-    net::TcpStream as TokioTcpStream,
-};
+use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 use crate::error::SocketSendError;
 
-use super::{DoipTcpPayload, SocketConfig};
+use super::SocketConfig;
 
 /// Simple implementation of a TCP Stream Read Half
 ///
 /// Allows for the passing of the read half being passed into a different thread
 /// seperate to the write half. Will be dropped if the Write Half is dropped.
-pub struct TcpStreamReadHalf {
-    io: FramedRead<ReadHalf<TokioTcpStream>, DoipCodec>,
+pub struct TcpStreamReadHalf<T>
+where
+    T: AsyncRead + AsyncWrite,
+{
+    io: FramedRead<ReadHalf<T>, DoipCodec>,
     #[allow(dead_code)]
     config: SocketConfig,
 }
 
-impl TcpStreamReadHalf {
+impl<T> TcpStreamReadHalf<T>
+where
+    T: AsyncRead + AsyncWrite,
+{
     /// Creates a new TCP Stream Read Half from an existing Tokio TCP Stream and
     /// config
-    pub fn new(
-        io: FramedRead<ReadHalf<TokioTcpStream>, DoipCodec>,
-        config: Option<SocketConfig>,
-    ) -> Self {
+    pub fn new(io: FramedRead<ReadHalf<T>, DoipCodec>, config: Option<SocketConfig>) -> Self {
         TcpStreamReadHalf {
             io,
             config: config.unwrap_or_default(),
@@ -35,7 +35,7 @@ impl TcpStreamReadHalf {
     }
 
     /// Read from the stream
-    pub async fn read(&mut self) -> Option<Result<DoipMessage, DecodeError>> {
+    pub async fn read(&mut self) -> Option<Result<DoipMessage, CodecError>> {
         self.io.next().await
     }
 }
@@ -44,18 +44,21 @@ impl TcpStreamReadHalf {
 ///
 /// Can be used to write messages to the sink. If dropped this will close the
 /// connection on the TcpStreamReadHalf.
-pub struct TcpStreamWriteHalf {
-    io: FramedWrite<WriteHalf<TokioTcpStream>, DoipCodec>,
+pub struct TcpStreamWriteHalf<T>
+where
+    T: AsyncRead + AsyncWrite,
+{
+    io: FramedWrite<WriteHalf<T>, DoipCodec>,
     config: SocketConfig,
 }
 
-impl TcpStreamWriteHalf {
+impl<T> TcpStreamWriteHalf<T>
+where
+    T: AsyncRead + AsyncWrite,
+{
     /// Creates a new TCP Stream Read Half from an existing Tokio TCP Stream and
     /// config
-    pub fn new(
-        io: FramedWrite<WriteHalf<TokioTcpStream>, DoipCodec>,
-        config: Option<SocketConfig>,
-    ) -> Self {
+    pub fn new(io: FramedWrite<WriteHalf<T>, DoipCodec>, config: Option<SocketConfig>) -> Self {
         TcpStreamWriteHalf {
             io,
             config: config.unwrap_or_default(),
@@ -63,11 +66,11 @@ impl TcpStreamWriteHalf {
     }
 
     /// Send a message to the sink
-    pub async fn send<A: DoipTcpPayload + DoipPayload + 'static>(
-        &mut self,
-        payload: A,
-    ) -> Result<(), SocketSendError> {
-        let msg = DoipMessage::new(self.config.protocol_version, Box::new(payload));
+    pub async fn send(&mut self, payload: DoipPayload) -> Result<(), SocketSendError> {
+        let msg = DoipMessageBuilder::new()
+            .protocol_version(self.config.protocol_version)
+            .payload(payload)
+            .build();
 
         match self.io.send(msg).await {
             Ok(_) => Ok(()),
