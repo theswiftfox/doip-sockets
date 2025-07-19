@@ -2,8 +2,10 @@ use std::io::{self};
 
 use doip_codec::{DoipCodec, Error as CodecError};
 use doip_definitions::{
-    builder::DoipMessageBuilder, header::ProtocolVersion, message::DoipMessage,
-    payload::DoipPayload,
+    builder::DoipMessageBuilder,
+    header::ProtocolVersion,
+    message::DoipMessage,
+    payload::{DiagnosticAckCode, DiagnosticMessageAck, DoipPayload},
 };
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpStream as TokioTcpStream, ToSocketAddrs};
@@ -69,7 +71,26 @@ impl TcpStream {
 
     /// Read a DoIP frame off the stream
     pub async fn read(&mut self) -> Option<Result<DoipMessage, CodecError>> {
-        self.io.next().await
+        let res = self.io.next().await;
+        if let Some(Ok(ref msg)) = res {
+            if let DoipPayload::DiagnosticMessage(ref diag_msg) = msg.payload {
+                if let Err(e) = self
+                    .send(DoipPayload::DiagnosticMessageAck(DiagnosticMessageAck {
+                        source_address: diag_msg.target_address,
+                        target_address: diag_msg.source_address,
+                        ack_code: DiagnosticAckCode::Acknowledged,
+                        previous_message: diag_msg.message.clone(),
+                    }))
+                    .await
+                {
+                    return Some(Err(CodecError::IoError(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Failed to send DiagnosticMessageAck: {}", e),
+                    ))));
+                }
+            }
+        }
+        res
     }
 
     /// Converts a standard library TCP Stream to a DoIP Framed TCP Stream

@@ -7,4 +7,8 @@ pub enum SocketSendError {
     /// Payload Type not supported by TCP Socket
     #[error("Payload Type not supported by TCP Socket")]
     InvalidTcpPayload,
+
+    /// IO Error
+    #[error("IO Error: {0}")]
+    IoError(#[from] std::io::Error),
 }

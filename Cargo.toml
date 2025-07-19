@@ -16,8 +16,8 @@ lto = true
 codegen-units = 1
 
 [dependencies]
-doip-codec = "2.0.8"
-doip-definitions = "3.0.13"
+doip-codec = { git = "https://github.com/theswiftfox/doip-codec.git", rev = "0dba319" }
+doip-definitions = { git = "https://github.com/theswiftfox/doip-definitions.git", rev = "bdeab8c" }
 futures = "0.3.31"
 tokio = { version = "1.43.0", features = [
   "rt-multi-thread",
@@ -33,5 +33,5 @@ thiserror = "2.0.12"
 [dev-dependencies]
 
 [features]
-default = []
+default = ["ssl"]
 ssl = ["dep:tokio-openssl", "dep:openssl"]
